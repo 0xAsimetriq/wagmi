@@ -1,5 +1,35 @@
 # @wagmi/cli
 
+## 0.1.13
+
+### Patch Changes
+
+- [#2000](https://github.com/wagmi-dev/wagmi/pull/2000) [`01254765`](https://github.com/wagmi-dev/wagmi/commit/01254765eb37b77aca26500c00c721f08a260912) Thanks [@tmm](https://github.com/tmm)! - Fixed React plugin name conflict.
+
+## 0.1.12
+
+### Patch Changes
+
+- [#1992](https://github.com/wagmi-dev/wagmi/pull/1992) [`efc93cad`](https://github.com/wagmi-dev/wagmi/commit/efc93cadacdb9c9960644dabe4ae837d384df52b) Thanks [@tmm](https://github.com/tmm)! - Refactored internals from ethers to viem.
+
+## 0.1.11
+
+### Patch Changes
+
+- [#1916](https://github.com/wagmi-dev/wagmi/pull/1916) [`950490fd`](https://github.com/wagmi-dev/wagmi/commit/950490fd132b3fb5b3455e77b58d70f134b8e5c9) Thanks [@technophile-04](https://github.com/technophile-04)! - Updated React plugin to use `Address` type instead of hardcoding `` `0x{string}` ``.
+
+## 0.1.10
+
+### Patch Changes
+
+- [#1892](https://github.com/wagmi-dev/wagmi/pull/1892) [`d3d6973b`](https://github.com/wagmi-dev/wagmi/commit/d3d6973ba9407e490140d2434eb83aad88d6e10d) Thanks [@greg-schrammel](https://github.com/greg-schrammel)! - Fixed generated read hooks `select` type.
+
+## 0.1.9
+
+### Patch Changes
+
+- [#1886](https://github.com/wagmi-dev/wagmi/pull/1886) [`36e119c6`](https://github.com/wagmi-dev/wagmi/commit/36e119c6d4bc28a7ae15c9602d0c613bc9681356) Thanks [@roninjin10](https://github.com/roninjin10)! - Fixed package detection for yarn^3
+
 ## 0.1.8
 
 ### Patch Changes

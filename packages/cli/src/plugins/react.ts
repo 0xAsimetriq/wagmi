@@ -88,6 +88,12 @@ export function react(config: ReactConfig = {}): ReactResult {
           x.imports?.includes('WriteContractMode'),
       )
 
+      const hookNames = new Set<string>()
+      const getHookNameError = (name: string, contractName: string) =>
+        new Error(
+          `Hook name "${name}" must be unique for contract "${contractName}".`,
+        )
+
       const content: string[] = []
       for (const contract of contracts) {
         const baseHookName = pascalCase(contract.name)
@@ -149,15 +155,20 @@ export function react(config: ReactConfig = {}): ReactResult {
         }
 
         if (hooks.useContract) {
+          const name = `use${baseHookName}`
+          if (hookNames.has(name)) throw getHookNameError(name, contract.name)
+          hookNames.add(name)
+
           imports.add('useContract')
           const docString = genDocString('useContract')
+
           let code
           if (isTypeScript) {
             imports.add('UseContractConfig')
             // prettier-ignore
             code = dedent`
             ${docString}
-            export function use${baseHookName}(
+            export function ${name}(
               config: Omit<UseContractConfig, 'abi'${omitted}>${typeParams} = {} as any,
             ) {
               ${innerContent}
@@ -167,7 +178,7 @@ export function react(config: ReactConfig = {}): ReactResult {
           } else
             code = dedent`
             ${docString}
-            export function use${baseHookName}(config = {}) {
+            export function ${name}(config = {}) {
               ${innerContent}
               return useContract(${innerHookConfig})
             }
@@ -193,26 +204,33 @@ export function react(config: ReactConfig = {}): ReactResult {
 
         if (hasReadFunction) {
           if (hooks.useContractRead) {
+            const name = `use${baseHookName}Read`
+            if (hookNames.has(name)) throw getHookNameError(name, contract.name)
+            hookNames.add(name)
+
             imports.add('useContractRead')
             const docString = genDocString('useContractRead')
+
             let code
             if (isTypeScript) {
               imports.add('UseContractReadConfig')
+              actionsImports.add('ReadContractResult')
               code = dedent`
               ${docString}
-              export function use${baseHookName}Read<
+              export function ${name}<
                 TFunctionName extends string,
+                TSelectData = ReadContractResult<typeof ${contract.meta.abiName}, TFunctionName>
               >(
-                config: Omit<UseContractReadConfig<typeof ${contract.meta.abiName}, TFunctionName>, 'abi'${omitted}>${typeParams} = {} as any,
+                config: Omit<UseContractReadConfig<typeof ${contract.meta.abiName}, TFunctionName, TSelectData>, 'abi'${omitted}>${typeParams} = {} as any,
               ) {
                 ${innerContent}
-                return useContractRead(${innerHookConfig} as UseContractReadConfig<typeof ${contract.meta.abiName}, TFunctionName>)
+                return useContractRead(${innerHookConfig} as UseContractReadConfig<typeof ${contract.meta.abiName}, TFunctionName, TSelectData>)
               }
               `
             } else
               code = dedent`
               ${docString}
-              export function use${baseHookName}Read(config = {}) {
+              export function ${name}(config = {}) {
                 ${innerContent}
                 return useContractRead(${innerHookConfig})
               }
@@ -231,6 +249,12 @@ export function react(config: ReactConfig = {}): ReactResult {
                 // Skip overrides since they are captured by same hook
                 if (contractNames.has(item.name)) continue
                 contractNames.add(item.name)
+
+                const name = `use${baseHookName}${pascalCase(item.name)}`
+                if (hookNames.has(name))
+                  throw getHookNameError(name, contract.name)
+                hookNames.add(name)
+
                 const config =
                   Object.entries({
                     ...innerHookParams,
@@ -244,24 +268,26 @@ export function react(config: ReactConfig = {}): ReactResult {
                   name: 'functionName',
                   value: item.name,
                 })
+
                 let code
                 if (isTypeScript) {
                   imports.add('UseContractReadConfig')
+                  actionsImports.add('ReadContractResult')
                   // prettier-ignore
                   code = dedent`
                   ${docString}
-                  export function use${baseHookName}${pascalCase(item.name)}(
-                    config: Omit<UseContractReadConfig<typeof ${contract.meta.abiName}, '${item.name}'>, 'abi'${omitted} | 'functionName'>${typeParams} = {} as any,
+                  export function ${name}<TSelectData = ReadContractResult<typeof ${contract.meta.abiName}, '${item.name}'>>(
+                    config: Omit<UseContractReadConfig<typeof ${contract.meta.abiName}, '${item.name}', TSelectData>, 'abi'${omitted} | 'functionName'>${typeParams} = {} as any,
                   ) {
                     ${innerContent}
-                    return useContractRead(${config} as UseContractReadConfig<typeof ${contract.meta.abiName}, '${item.name}'>)
+                    return useContractRead(${config} as UseContractReadConfig<typeof ${contract.meta.abiName}, '${item.name}', TSelectData>)
                   }
                   `
                 } else {
                   // prettier-ignore
                   code = dedent`
                   ${docString}
-                  export function use${baseHookName}${pascalCase(item.name)}Read(config = {}) {
+                  export function ${name}(config = {}) {
                     ${innerContent}
                     return useContractRead(${config})
                   }
@@ -275,8 +301,13 @@ export function react(config: ReactConfig = {}): ReactResult {
 
         if (hasWriteFunction) {
           if (hooks.useContractWrite) {
+            const name = `use${baseHookName}Write`
+            if (hookNames.has(name)) throw getHookNameError(name, contract.name)
+            hookNames.add(name)
+
             imports.add('useContractWrite')
             const docString = genDocString('useContractWrite')
+
             let code
             if (isTypeScript) {
               const hasMultichainAddress = typeof contract.address === 'object'
@@ -284,7 +315,10 @@ export function react(config: ReactConfig = {}): ReactResult {
                 ? `TChainId extends number = keyof typeof ${contract.meta.addressName}`
                 : ''
               let typeParams_ = ''
-              if (TChainId) typeParams_ = 'address?: never; chainId?: TChainId;'
+              if (TChainId) {
+                imports.add('Address')
+                typeParams_ = 'address?: never; chainId?: TChainId;'
+              }
 
               imports.add('UseContractWriteConfig')
               if (!hasWriteContractMode) actionsImports.add('WriteContractMode')
@@ -292,7 +326,7 @@ export function react(config: ReactConfig = {}): ReactResult {
               // prettier-ignore
               code = dedent`
               ${docString}
-              export function use${baseHookName}Write<
+              export function ${name}<
                 TMode extends WriteContractMode,
                 TFunctionName extends string,
                 ${TChainId}
@@ -302,7 +336,7 @@ export function react(config: ReactConfig = {}): ReactResult {
                       TMode,
                       PrepareWriteContractResult<typeof ${contract.meta.abiName}, string>['abi'],
                       TFunctionName
-                    >${TChainId ? ` & { address?: \`0x\${string}\`; chainId?: TChainId; }` : ''}
+                    >${TChainId ? ` & { address?: Address; chainId?: TChainId; }` : ''}
                   : UseContractWriteConfig<TMode, typeof ${contract.meta.abiName}, TFunctionName> & {
                       abi?: never
                       ${typeParams_}
@@ -315,7 +349,7 @@ export function react(config: ReactConfig = {}): ReactResult {
             } else
               code = dedent`
               ${docString}
-              export function use${baseHookName}Write(config = {}) {
+              export function ${name}(config = {}) {
                 ${innerContent}
                 return useContractWrite(${innerHookConfig})
               }
@@ -334,6 +368,12 @@ export function react(config: ReactConfig = {}): ReactResult {
                 // Skip overrides since they are captured by same hook
                 if (contractNames.has(item.name)) continue
                 contractNames.add(item.name)
+
+                const name = `use${baseHookName}${pascalCase(item.name)}`
+                if (hookNames.has(name))
+                  throw getHookNameError(name, contract.name)
+                hookNames.add(name)
+
                 const config =
                   Object.entries({
                     ...innerHookParams,
@@ -347,6 +387,7 @@ export function react(config: ReactConfig = {}): ReactResult {
                   name: 'functionName',
                   value: item.name,
                 })
+
                 let code
                 if (isTypeScript) {
                   const hasMultichainAddress =
@@ -357,7 +398,8 @@ export function react(config: ReactConfig = {}): ReactResult {
                   let preparedTypeParams = `functionName?: '${item.name}'`
                   let unpreparedTypeParams = `functionName?: '${item.name}'`
                   if (TChainId) {
-                    preparedTypeParams = `address?: \`0x\${string}\`; chainId?: TChainId; functionName?: '${item.name}'`
+                    imports.add('Address')
+                    preparedTypeParams = `address?: Address; chainId?: TChainId; functionName?: '${item.name}'`
                     unpreparedTypeParams = `address?: never; chainId?: TChainId; functionName?: '${item.name}'`
                   }
 
@@ -368,7 +410,7 @@ export function react(config: ReactConfig = {}): ReactResult {
                   // prettier-ignore
                   code = dedent`
                   ${docString}
-                  export function use${baseHookName}${pascalCase(item.name)}<
+                  export function ${name}<
                     TMode extends WriteContractMode,
                     ${TChainId}
                   >(
@@ -391,7 +433,7 @@ export function react(config: ReactConfig = {}): ReactResult {
                   // prettier-ignore
                   code = dedent`
                   ${docString}
-                  export function use${baseHookName}${pascalCase(item.name)}(config = {}) {
+                  export function ${name}(config = {}) {
                     ${innerContent}
                     return useContractWrite(${config})
                   }
@@ -403,15 +445,20 @@ export function react(config: ReactConfig = {}): ReactResult {
           }
 
           if (hooks.usePrepareContractWrite) {
+            const name = `usePrepare${baseHookName}Write`
+            if (hookNames.has(name)) throw getHookNameError(name, contract.name)
+            hookNames.add(name)
+
             imports.add('usePrepareContractWrite')
             const docString = genDocString('usePrepareContractWrite')
+
             let code
             if (isTypeScript) {
               imports.add('UsePrepareContractWriteConfig')
               // prettier-ignore
               code = dedent`
               ${docString}
-              export function usePrepare${baseHookName}Write<
+              export function ${name}<
                 TFunctionName extends string,
               >(
                 config: Omit<UsePrepareContractWriteConfig<typeof ${contract.meta.abiName}, TFunctionName>, 'abi'${omitted}>${typeParams} = {} as any,
@@ -423,7 +470,7 @@ export function react(config: ReactConfig = {}): ReactResult {
             } else
               code = dedent`
               ${docString}
-              export function usePrepare${baseHookName}Write(config = {}) {
+              export function ${name}(config = {}) {
                 ${innerContent}
                 return usePrepareContractWrite(${innerHookConfig})
               }
@@ -442,6 +489,12 @@ export function react(config: ReactConfig = {}): ReactResult {
                 // Skip overrides since they are captured by same hook
                 if (contractNames.has(item.name)) continue
                 contractNames.add(item.name)
+
+                const name = `usePrepare${baseHookName}${pascalCase(item.name)}`
+                if (hookNames.has(name))
+                  throw getHookNameError(name, contract.name)
+                hookNames.add(name)
+
                 const config =
                   Object.entries({
                     ...innerHookParams,
@@ -455,13 +508,14 @@ export function react(config: ReactConfig = {}): ReactResult {
                   name: 'functionName',
                   value: item.name,
                 })
+
                 let code
                 if (isTypeScript) {
                   imports.add('UsePrepareContractWriteConfig')
                   // prettier-ignore
                   code = dedent`
                   ${docString}
-                  export function usePrepare${baseHookName}${pascalCase(item.name)}(
+                  export function ${name}(
                     config: Omit<UsePrepareContractWriteConfig<typeof ${contract.meta.abiName}, '${item.name}'>, 'abi'${omitted} | 'functionName'>${typeParams} = {} as any,
                   ) {
                     ${innerContent}
@@ -472,7 +526,7 @@ export function react(config: ReactConfig = {}): ReactResult {
                   // prettier-ignore
                   code = dedent`
                   ${docString}
-                  export function usePrepare${baseHookName}${pascalCase(item.name)}(config = {}) {
+                  export function ${name}(config = {}) {
                     ${innerContent}
                     return usePrepareContractWrite(${config})
                   }
@@ -486,15 +540,20 @@ export function react(config: ReactConfig = {}): ReactResult {
 
         if (hasEvent) {
           if (hooks.useContractEvent) {
+            const name = `use${baseHookName}Event`
+            if (hookNames.has(name)) throw getHookNameError(name, contract.name)
+            hookNames.add(name)
+
             imports.add('useContractEvent')
             const docString = genDocString('useContractEvent')
+
             let code
             if (isTypeScript) {
               imports.add('UseContractEventConfig')
               // prettier-ignore
               code = dedent`
               ${docString}
-              export function use${baseHookName}Event<
+              export function ${name}<
                 TEventName extends string,
               >(
                 config: Omit<UseContractEventConfig<typeof ${contract.meta.abiName}, TEventName>, 'abi'${omitted}>${typeParams} = {} as any,
@@ -506,7 +565,7 @@ export function react(config: ReactConfig = {}): ReactResult {
             } else
               code = dedent`
               ${docString}
-              export function use${baseHookName}Event(config = {}) {
+              export function ${name}(config = {}) {
                 ${innerContent}
                 return useContractEvent(${innerHookConfig})
               }
@@ -521,6 +580,12 @@ export function react(config: ReactConfig = {}): ReactResult {
                 // Skip overrides since they are captured by same hook
                 if (contractNames.has(item.name)) continue
                 contractNames.add(item.name)
+
+                const name = `use${baseHookName}${pascalCase(item.name)}Event`
+                if (hookNames.has(name))
+                  throw getHookNameError(name, contract.name)
+                hookNames.add(name)
+
                 const config =
                   Object.entries({
                     ...innerHookParams,
@@ -534,13 +599,14 @@ export function react(config: ReactConfig = {}): ReactResult {
                   name: 'eventName',
                   value: item.name,
                 })
+
                 let code
                 if (isTypeScript) {
                   imports.add('UseContractEventConfig')
                   // prettier-ignore
                   code = dedent`
                   ${docString}
-                  export function use${baseHookName}${pascalCase(item.name)}Event(
+                  export function ${name}(
                     config: Omit<UseContractEventConfig<typeof ${contract.meta.abiName}, '${item.name}'>, 'abi'${omitted} | 'eventName'>${typeParams} = {} as any,
                   ) {
                     ${innerContent}
@@ -551,7 +617,7 @@ export function react(config: ReactConfig = {}): ReactResult {
                   // prettier-ignore
                   code = dedent`
                   ${docString}
-                  export function use${baseHookName}${pascalCase(item.name)}Event(config = {}) {
+                  export function ${name}(config = {}) {
                     ${innerContent}
                     return useContractEvent(${config})
                   }
